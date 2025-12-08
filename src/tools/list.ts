@@ -17,10 +17,12 @@ export const listFilesSchema = {
 };
 
 export function registerListFiles(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "list_files",
-    "List files and folders in the Obsidian vault",
-    listFilesSchema,
+    {
+      description: "List files and folders in the Obsidian vault",
+      inputSchema: listFilesSchema,
+    },
     async ({ path, max_results }) => {
       try {
         const result = await listFiles(path, max_results);

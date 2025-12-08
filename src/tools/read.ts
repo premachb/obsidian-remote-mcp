@@ -10,10 +10,12 @@ export const readNoteSchema = {
 };
 
 export function registerReadNote(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "read_note",
-    "Read the contents of a note from the Obsidian vault",
-    readNoteSchema,
+    {
+      description: "Read the contents of a note from the Obsidian vault",
+      inputSchema: readNoteSchema,
+    },
     async ({ path }) => {
       try {
         const content = await readNote(path);

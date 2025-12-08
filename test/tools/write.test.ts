@@ -24,12 +24,12 @@ describe("write_note tool", () => {
   beforeEach(() => {
     server = new McpServer({ name: "test", version: "1.0.0" });
 
-    const originalTool = server.tool.bind(server);
-    server.tool = vi.fn((name, description, schema, handler) => {
+    const originalRegisterTool = server.registerTool.bind(server);
+    server.registerTool = vi.fn((name, config, handler) => {
       if (name === "write_note") {
         toolHandler = handler as any;
       }
-      return originalTool(name, description, schema, handler);
+      return originalRegisterTool(name, config, handler);
     }) as any;
 
     registerWriteNote(server);

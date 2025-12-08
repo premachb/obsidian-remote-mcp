@@ -16,10 +16,12 @@ export const writeNoteSchema = {
 };
 
 export function registerWriteNote(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "write_note",
-    "Create a new note or update an existing note in the Obsidian vault",
-    writeNoteSchema,
+    {
+      description: "Create a new note or update an existing note in the Obsidian vault",
+      inputSchema: writeNoteSchema,
+    },
     async ({ path, content, overwrite }) => {
       try {
         const normalizedPath = ensureMarkdownExtension(path);

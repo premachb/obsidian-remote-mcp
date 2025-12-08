@@ -18,10 +18,12 @@ export const searchNotesSchema = {
 };
 
 export function registerSearchNotes(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "search_notes",
-    "Search for notes containing specific text",
-    searchNotesSchema,
+    {
+      description: "Search for notes containing specific text",
+      inputSchema: searchNotesSchema,
+    },
     async ({ query, path, max_results }) => {
       try {
         const results = await searchNotes(query, path, max_results);
