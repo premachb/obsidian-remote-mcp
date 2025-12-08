@@ -4,7 +4,6 @@ import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as apigateway from "aws-cdk-lib/aws-apigatewayv2";
 import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
-import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -23,16 +22,6 @@ export class ObsidianMcpStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN, // Don't delete vault on stack destroy
-    });
-
-    // Secret for auth token (auto-generated)
-    const authTokenSecret = new secretsmanager.Secret(this, "AuthTokenSecret", {
-      secretName: "obsidian-mcp/auth-token",
-      description: "Bearer token for MCP server authentication",
-      generateSecretString: {
-        passwordLength: 32,
-        excludePunctuation: true,
-      },
     });
 
     // Lambda Web Adapter layer ARN for us-east-1
@@ -56,7 +45,6 @@ export class ObsidianMcpStack extends cdk.Stack {
         PORT: "8080",
         // App config
         S3_BUCKET_NAME: vaultBucket.bucketName,
-        AUTH_TOKEN_SECRET_ARN: authTokenSecret.secretArn,
       },
       bundling: {
         minify: true,
@@ -89,7 +77,6 @@ export class ObsidianMcpStack extends cdk.Stack {
 
     // Grant Lambda permissions
     vaultBucket.grantReadWrite(mcpHandler);
-    authTokenSecret.grantRead(mcpHandler);
 
     // HTTP API Gateway
     const httpApi = new apigateway.HttpApi(this, "McpHttpApi", {
@@ -113,16 +100,42 @@ export class ObsidianMcpStack extends cdk.Stack {
       mcpHandler
     );
 
-    // Routes
+    // Routes - MCP endpoint
     httpApi.addRoutes({
       path: "/mcp",
       methods: [apigateway.HttpMethod.POST],
       integration: lambdaIntegration,
     });
 
+    // Health check
     httpApi.addRoutes({
       path: "/health",
       methods: [apigateway.HttpMethod.GET],
+      integration: lambdaIntegration,
+    });
+
+    // OAuth 2.0 endpoints
+    httpApi.addRoutes({
+      path: "/.well-known/oauth-authorization-server",
+      methods: [apigateway.HttpMethod.GET],
+      integration: lambdaIntegration,
+    });
+
+    httpApi.addRoutes({
+      path: "/register",
+      methods: [apigateway.HttpMethod.POST],
+      integration: lambdaIntegration,
+    });
+
+    httpApi.addRoutes({
+      path: "/authorize",
+      methods: [apigateway.HttpMethod.GET],
+      integration: lambdaIntegration,
+    });
+
+    httpApi.addRoutes({
+      path: "/token",
+      methods: [apigateway.HttpMethod.POST],
       integration: lambdaIntegration,
     });
 
@@ -147,14 +160,9 @@ export class ObsidianMcpStack extends cdk.Stack {
       description: "S3 bucket name for Obsidian vault",
     });
 
-    new cdk.CfnOutput(this, "AuthTokenSecretArn", {
-      value: authTokenSecret.secretArn,
-      description: "ARN of the auth token secret in Secrets Manager",
-    });
-
-    new cdk.CfnOutput(this, "GetAuthTokenCommand", {
-      value: `aws secretsmanager get-secret-value --secret-id ${authTokenSecret.secretArn} --query SecretString --output text`,
-      description: "Command to retrieve the auth token",
+    new cdk.CfnOutput(this, "OAuthMetadataUrl", {
+      value: `${httpApi.apiEndpoint}/.well-known/oauth-authorization-server`,
+      description: "OAuth 2.0 Authorization Server Metadata URL",
     });
   }
 }
