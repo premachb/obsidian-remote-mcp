@@ -97,6 +97,9 @@ export function handleMetadata(req: Request, res: Response): void {
     token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
     code_challenge_methods_supported: ["S256", "plain"],
     scopes_supported: ["mcp:tools"],
+    // Obsidian logo for the connector icon
+    logo_uri: "https://obsidian.md/images/obsidian-logo-gradient.svg",
+    service_documentation: "https://github.com/your-username/obsidian-s3-mcp",
   };
 
   res.json(metadata);
