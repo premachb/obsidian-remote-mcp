@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { Request, Response } from "express";
 
 /**
@@ -29,20 +30,17 @@ interface RegisteredClient {
   createdAt: number;
 }
 
-interface AccessToken {
-  token: string;
-  clientId: string;
-  expiresAt: number;
-}
-
-// Storage
+// In-memory storage for short-lived auth codes and client registrations
+// (acceptable to lose on cold start - clients will re-register)
 const authorizationCodes = new Map<string, AuthorizationCode>();
 const registeredClients = new Map<string, RegisteredClient>();
-const accessTokens = new Map<string, AccessToken>();
 
 // Configuration
 const TOKEN_EXPIRY_SECONDS = 3600; // 1 hour
 const CODE_EXPIRY_SECONDS = 600; // 10 minutes
+
+// JWT secret from environment (set in CDK stack)
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-do-not-use-in-production";
 
 /**
  * Generate a random string for tokens/codes
@@ -327,15 +325,12 @@ export function handleToken(req: Request, res: Response): void {
   // Mark code as used
   authCode.used = true;
 
-  // Generate access token
-  const accessToken = generateRandomString(64);
-  const expiresAt = Date.now() + TOKEN_EXPIRY_SECONDS * 1000;
-
-  accessTokens.set(accessToken, {
-    token: accessToken,
-    clientId: authCode.clientId,
-    expiresAt,
-  });
+  // Generate JWT access token (stateless - survives Lambda cold starts)
+  const accessToken = jwt.sign(
+    { clientId: authCode.clientId },
+    JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRY_SECONDS }
+  );
 
   // Clean up the authorization code
   authorizationCodes.delete(code);
@@ -349,6 +344,7 @@ export function handleToken(req: Request, res: Response): void {
 
 /**
  * Validate an access token from the Authorization header
+ * Uses JWT verification - stateless, survives Lambda cold starts
  * Returns true if valid, false otherwise
  */
 export function validateAccessToken(authHeader: string | undefined): boolean {
@@ -362,23 +358,20 @@ export function validateAccessToken(authHeader: string | undefined): boolean {
   }
 
   const token = parts[1];
-  const tokenData = accessTokens.get(token);
 
-  if (!tokenData) {
+  try {
+    // JWT verify checks signature and expiration automatically
+    jwt.verify(token, JWT_SECRET);
+    return true;
+  } catch {
+    // Token invalid or expired
     return false;
   }
-
-  // Check expiration
-  if (Date.now() > tokenData.expiresAt) {
-    accessTokens.delete(token);
-    return false;
-  }
-
-  return true;
 }
 
 /**
- * Clean up expired codes and tokens (call periodically)
+ * Clean up expired authorization codes (call periodically)
+ * Note: JWT tokens are stateless and don't need cleanup
  */
 export function cleanupExpired(): void {
   const now = Date.now();
@@ -386,12 +379,6 @@ export function cleanupExpired(): void {
   for (const [code, data] of authorizationCodes) {
     if (now > data.expiresAt) {
       authorizationCodes.delete(code);
-    }
-  }
-
-  for (const [token, data] of accessTokens) {
-    if (now > data.expiresAt) {
-      accessTokens.delete(token);
     }
   }
 }

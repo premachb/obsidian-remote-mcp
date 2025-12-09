@@ -7,6 +7,7 @@ import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { Construct } from "constructs";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import * as crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +46,8 @@ export class ObsidianMcpStack extends cdk.Stack {
         PORT: "8080",
         // App config
         S3_BUCKET_NAME: vaultBucket.bucketName,
+        // JWT secret for OAuth tokens (survives Lambda cold starts)
+        JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(),
       },
       bundling: {
         minify: true,
